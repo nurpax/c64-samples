@@ -7,7 +7,7 @@
 //----------------------------------------------------------
 //              Variables
 //----------------------------------------------------------
-.const irq0line = $10
+.const irq0line = 16
 .const textmodeswitchline = 50+200-12
 .const rastercolorline = 50+200-9
 
