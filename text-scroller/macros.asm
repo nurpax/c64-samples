@@ -100,14 +100,3 @@
     adc #0
     sta res+1
 }
-
-// add 16 bit immediate to a 16bit value
-.macro add16_imm16(res, lo, hi) {
-    clc
-    lda res
-    adc #lo
-    sta res+0
-    lda res+1
-    adc #hi
-    sta res+1
-}

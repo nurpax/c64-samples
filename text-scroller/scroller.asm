@@ -10,7 +10,6 @@
 .const irq0line = $10
 .const textmodeswitchline = 50+200-12
 .const rastercolorline = 50+200-9
-.const endofframeline = $ff // 50+200
 
 // VIC-II BANK 1
 .const VIC_BASE = $4000
@@ -32,9 +31,9 @@ start: {
     ora #%00000010 // VIC-II bank 1
     sta $dd00
 
-    sta $d021
     lda #0
     sta $d020
+    sta $d021
 
     // screen ram ($0400), bitmap $2000
 //Bits #1-#3: In text mode, pointer to character memory (bits #11-#13), relative to VIC bank, memory address $DD00. Values:
@@ -76,46 +75,20 @@ clearlastrow:
     cpx #40
     bne clearlastrow
 
-    lda #0
-    ldx #0
-    sta $d020
-    stx $d021
-
     // IRQ setup
     sei
     lda #$35        // Bank out kernal and basic
-    sta $01         // $e000-$ffff
-
-
-    lda #$7f   //Disable CIA IRQ's
-    sta $dc0d
-    sta $dd0d
-
-    lda #<irq0
-    ldx #>irq0
-    sta $fffe
-    stx $ffff
-
-    lda #$01
-    sta $d01a
-    lda #irq0line   // IRQ raster line
-    sta $d012
-    lda #$1b        // Clear the High bit (lines 256-318)
-    sta $d011
-
-    asl $d019       // Ack any previous raster interrupt
-    bit $dc0d       // reading the interrupt control registers
-    bit $dd0d       // clears them
+    sta $01
+    // Setup raster IRQ
+    SetupIRQ(irq0, irq0line, false)
 
     lda #0
     sta framecount
-    cli        //Allow IRQ's
+    cli
 
 
 infloop:
     jmp infloop
-exit:
-    rts
 }
 
 // Copy ROM font from $D000 ROM to $4000
@@ -155,23 +128,8 @@ framecount: .byte 0
 charpos:    .byte 0, 0
 
 irq0: {
-    //The CPU cycles spent to get in here       [7]
-    sta reseta1    //Preserve A,X and Y                [4]
-    stx resetx1    //Registers                 [4]
-    sty resety1    //using self modifying code         [4]
+    irq_start(end)
 
-    lda #<irq1 //Set IRQ Vector                [4]
-    ldx #>irq1 //to point to the               [4]
-       //next part of the
-    sta $fffe  //Stable IRQ                    [4]
-    stx $ffff      //                      [4]
-
-    lda #textmodeswitchline                 // IRQ raster line
-    sta $d012
-    asl $d019  //Ack raster interrupt              [6]
-
-    /////////////////////////////////////////////////////
-    // basic per frame updates
     inc framecount
 
     // Set screen mode
@@ -183,59 +141,50 @@ irq0: {
     lda #$18
     sta $d018
 
-    lda colora+1
-    sta $d021
-
     jsr scroller_update_char_row
 
-    /////////////////////////////////////////////////////
-lab_a1: lda #$00    //Reload A,X,and Y
-.label reseta1 = lab_a1+1
-lab_x1: ldx #$00
-.label resetx1 = lab_x1+1
-lab_y1: ldy #$00
-.label  resety1 = lab_y1+1
+    irq_end(irq1, textmodeswitchline)
+end:
     rti
 }
 
 irq1: {
     irq_start(end)
 
-    //////////////////////////////////////
-    // textmode switch is padded to 63 cycles
-    textmodeSwitch()
+    lda #$1b        // screen on, text mode
+    sta $d011
+
+    lda framecount
+    and #7
+    eor #7 // xor bits 0-2 and leave bit 3 zero for 38 column mode
+    sta $d016
+
+    lda #$10 // bank + $0400
+    sta $d018
 
     irq_end(irq2, rastercolorline)
 end:
 }
 
-//===========================================================================================
-// Main interrupt handler
-// [x] denotes the number of cycles
-//===========================================================================================
+// Stable raster IRQ for color bars
 irq2: {
     double_irq(end, irq3)
 
-//===========================================================================================
-// Part 2 of the Main interrupt handler
-//===========================================================================================
 irq3:
-    txs         //Restore stack pointer to point the the return
-                //information of irq1, being our endless loop.
+    txs
 
-    ldx #$09   //Wait exactly 9 * (2+3) cycles so that the raster line
-    dex        //is in the border              [2]
-    bne *-1    //                              [3]
+    // Wait exactly 9 * (2+3) cycles so that the raster line is in the border
+    ldx #$09
+    dex
+    bne *-1
 
-    ///////////////////////////////////////////
-    // first line (bad line so have only 23 cycles!)
+    // First line is a bad line (so we have only 23 cycles!)
     lda colors1+0           // 4 cycles
     sta $d021               // 4 cycles
     .for (var i = 0; i < 6; i++) {
         nop
     }
     bit $fe
-    ///////////////////////////////////////////
 
     // Next 7 lines are normal lines, so 63 cycles per color change
     ldx #$01
@@ -250,25 +199,8 @@ irq3:
     cpx #colorend-colors1   // 2
     bne !-                  // 3
 
-    irq_end(irq4, endofframeline)
-end:
-}
-
-//===========================================================================================
-// Part 3 of the Main interrupt handler
-//===========================================================================================
-irq4: {
-    irq_start(end)
-
-    ldy #$13   //Waste time so this line is drawn completely
-    dey        //  [2]
-    bne *-1    //  [3]
-            //same line!
-
-    lda #0   //Back to our original colors
-    ldx #0
-    sta $d020
-    stx $d021
+    lda #0
+    sta $d021
 
     irq_end(irq0, irq0line)
 end:
@@ -288,11 +220,13 @@ moveline:
     cpx #39
     bne moveline
 
+    clc
     lda charpos
+    adc #<scrolltext
     sta $20
     lda charpos+1
+    adc #>scrolltext
     sta $21
-    add16_imm16($20, <scrolltext, >scrolltext)
 
     ldy #0
     lda ($20),y
@@ -315,33 +249,9 @@ noscroll:
     rts
 }
 
-.macro textmodeSwitch() {
-    // 2
-    lda #$1b        // screen on, text mode
-    // 4
-    sta $d011
-
-    // 4
-    lda framecount
-    // 2
-    and #7
-    // 2
-    eor #7 // xor bits 0-2 and leave bit 3 zero for 38 column mode
-    // 4
-    sta $d016
-
-    // 2
-    lda #$10 // bank + $0400
-    // 4
-    sta $d018
-    // 24 cycles so far
-}
-
 .align 64
 colors1:
                 .text "cmagcmag"
-//                .byte 0, WHITE, BLUE, GRAY // stability test colors
-//                .byte 0, WHITE, BLUE, GRAY
 colorend:
 
 scrolltext:
@@ -349,12 +259,12 @@ scrolltext:
     .text "lorem ipsum     "
     .text "lorem ipsum     "
     .text "lorem ipsum     "
-    .text "lorem ipsum     "
+    .text "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt"
     .text "                "
 scrolltextend:
 
 // We don't need the pad for anything but we don't want to allocate data or
-// code there.  Stuff from bintris.asm was overlaid on $4000 and caused bugs.
+// code there.
  *=$4000 "reserve VIC memory - don't let this overlap any other segment" virtual
 pad: .fill $1000,0
 
