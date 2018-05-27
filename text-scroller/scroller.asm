@@ -186,9 +186,8 @@ irq3:
     }
     bit $fe
 
-    // Next 7 lines are normal lines, so 63 cycles per color change
+    // Next 7 lines are normal lines, so 63 cycles per line
     ldx #$01
-    // the loop total must be 63 cycles
 !:
     lda colors1,x           // 4 cycles
     sta $d021               // 4 cycles
