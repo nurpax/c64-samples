@@ -160,7 +160,7 @@ def construct_fill_table():
     fill_tbl = [None for x in range(8 * subpix)]
 
     for y0 in range(0, 8 * subpix):
-        fill_tbl[y0] = [None for x in range(0, 3 * 8 * subpix)]
+        fill_tbl[y0] = [None for x in range(0, 8 * subpix)]
         for yi1 in range(-4 * subpix, 4 * subpix):
             # ax + by + c = 0
             y1 = y0 + yi1
@@ -169,6 +169,42 @@ def construct_fill_table():
             c = -(a * x0 + b * y0)
             fill_tbl[y0][yi1 + 4 * subpix] = [mk8x8(-8, a, b, c), mk8x8(0, a, b, c), mk8x8(8, a, b, c)]
 
+
+def save_table():
+    global fill_tbl, subpix
+    charset_idx = {}
+    charidx_to_pix ={}
+    charidx = 0
+    for y0 in range(0, 8 * subpix):
+        for y1 in range(0, 8 * subpix):
+            chars = fill_tbl[y0][y1]
+            for c in chars:
+                if tuple(c) not in charset_idx:
+                    charset_idx[tuple(c)] = charidx
+                    charidx_to_pix[charidx] = tuple(c)
+                    charidx += 1
+    with open("charset.inc", "wt") as fo:
+        # write charset
+        fo.write("charset:\n")
+        for ci in range(0, charidx):
+            c = charidx_to_pix[ci]
+            fo.write("    // char ${:02x}\n".format(ci))
+            for i in range(0,8):
+                fo.write("    .byte %")
+                for j in range(0, 8):
+                    fo.write("{0}".format(c[i*8+j]))
+                fo.write("\n")
+        # write char indices
+        fo.write("y0y1tbl:\n")
+        for y1 in range(0, 8 * subpix):
+            for y0 in range(0, 8 * subpix):
+                chars = fill_tbl[y0][y1]
+                fo.write("    .byte ")
+                idx0 = charset_idx[tuple(chars[0])]
+                idx1 = charset_idx[tuple(chars[1])]
+                idx2 = charset_idx[tuple(chars[2])]
+                idx3 = charset_idx[tuple((1,)*64)]
+                fo.write("${:02x}, ${:02x}, ${:02x}, ${:02x}\n".format(idx0, idx1, idx2, idx3))
 
 construct_fill_table()
 
@@ -179,6 +215,8 @@ for i in fill_tbl:
             unique_chars[str(c)] += 1
 
 print ("unique chars: {0}", len(unique_chars))
+
+save_table()
 
 dt = 1/60.0
 pyglet.clock.schedule_interval(update_anim, dt)
