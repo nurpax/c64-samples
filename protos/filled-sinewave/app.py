@@ -21,8 +21,8 @@ framecount = 0
 fill_tbl = None
 
 def anim(x):
-    a = sin(x / 30.0 + phase) * 10.0
-    b = sin(x / 45.0 + -phase*1.773) * 4.3
+    a = sin(x / 30.0 + phase) * 7.0
+    b = sin(x / 45.0 + -phase*1.773) * 7.3
     return a + b
 
 
