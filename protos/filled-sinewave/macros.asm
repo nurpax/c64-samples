@@ -3,7 +3,6 @@
         pha
         lda #0 + color
         sta $d020
-        sta $d021
         pla
     }
 }
@@ -91,6 +90,20 @@
     nop        //IRQ Triggers
 }
 
+.macro mov16(res, v) {
+    lda v+0
+    sta res+0
+    lda v+1
+    sta res+1
+}
+
+.macro mov16imm(res, val) {
+    lda #<val
+    sta res+0
+    lda #>val
+    sta res+1
+}
+
 .macro add16_imm8(res, lo) {
     clc
     lda res
@@ -98,5 +111,15 @@
     sta res+0
     lda res+1
     adc #0
+    sta res+1
+}
+
+.macro add16_imm16(res, imm) {
+    clc
+    lda res
+    adc #<imm
+    sta res+0
+    lda res+1
+    adc #>imm
     sta res+1
 }
