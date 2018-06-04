@@ -170,6 +170,17 @@ def construct_fill_table():
             fill_tbl[y0][yi1 + 4 * subpix] = [mk8x8(-8, a, b, c), mk8x8(0, a, b, c), mk8x8(8, a, b, c)]
 
 
+def swap_idx(charset_idx, charidx_to_pix, pix, code):
+    old_idx = charset_idx[pix]
+    pix_a = charidx_to_pix[old_idx]
+    pix_b = charidx_to_pix[code]
+
+    charidx_to_pix[code] = pix_a
+    charidx_to_pix[old_idx] = pix_b
+    charset_idx[pix] = code
+    charset_idx[pix_b] = old_idx
+
+
 def save_table():
     global fill_tbl, subpix
     charset_idx = {}
@@ -183,6 +194,14 @@ def save_table():
                     charset_idx[tuple(c)] = charidx
                     charidx_to_pix[charidx] = tuple(c)
                     charidx += 1
+
+    # swap chars so that the empty square is in the slot $20 (space) and the
+    # fully filled block in block $a0 (filled block).  This is just to make it
+    # look better if viewed without the charset enabled, ie., for explanations
+    # on the blog.
+    swap_idx(charset_idx, charidx_to_pix, tuple((0,)*64), 0x20)
+    swap_idx(charset_idx, charidx_to_pix, tuple((1,)*64), 0xA0)
+
     with open("charset.inc", "wt") as fo:
         # write charset
         fo.write("charset:\n")

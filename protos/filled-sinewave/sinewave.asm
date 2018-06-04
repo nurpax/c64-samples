@@ -22,9 +22,9 @@
 .const irq0line = 16
 
 start: {
-    ClearScreen($0400, 7)
+    ClearScreen($0400, $20)
 
-    lda #1
+    lda #$a0
     .for (var y = 16; y < 25; y++) {
         .for (var x = 0; x < 40; x++) {
             sta $0400 + y*40 + x
@@ -184,7 +184,7 @@ render_sinewave: {
             sta (zp_yptr),y
         }
         ldy #4*40
-        lda #1
+        lda #$a0
         sta (zp_yptr),y
     }
     rts
