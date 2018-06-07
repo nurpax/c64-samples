@@ -1,5 +1,5 @@
 
-.const debug = false
+.const debug = true
 :BasicUpstart2(start)
 
 .import source "macros.asm"
@@ -71,11 +71,6 @@ vsync:
 
 .align 4
 
-multab40:
-.for (var i = 0; i < 25; i++) {
-    .word i*40
-}
-
 sintab1:
 .for (var i = 0; i < 256; i++) {
     .byte sin(i/256 * PI * 2)*26
@@ -83,7 +78,7 @@ sintab1:
 
 sintab2:
 .for (var i = 0; i < 256; i++) {
-    .byte sin(i/256 * PI * 2)*18
+    .byte sin(i/256 * PI * 2)*18 + 64
 }
 
 ypos:
@@ -102,10 +97,7 @@ loop:
     ldy zp_th1+1
     clc
     adc sintab2, y
-    clc
-    adc #64
     lsr
-
     sta ypos, x
 
     add16_imm16(zp_th0, 2*1600)
@@ -123,42 +115,47 @@ phase0: .word 0
 phase1: .word 0
 }
 
+.const MULTAB_X_STRIDE = 25
+multab40:
+.for (var x = 0; x < 40; x++) {
+    .for (var y = 0; y < MULTAB_X_STRIDE; y++) {
+        .word $0400 + y*40 + x + 14*40
+    }
+}
+
+.align $100
+lsrtab:
+    .for (var i = 0; i < 256; i++) {
+        .byte (i>>4)<<1
+    }
+
+asltab:
+    .for (var i = 0; i < 256; i++) {
+        .byte ((i+8) << 4)
+    }
+
 render_sinewave: {
     .const zp_yptr = $20
     .const zp_chrptr = $22
     .const zp_ytmp = $24
     .for (var i = 0; i < 40; i++) {
-        mov16imm(zp_yptr, $0400 + i + 14*40)
-
         // Compute destination y pointer
-        lda ypos+i
-        lsr
-        lsr
-        lsr
-        and #$fe
+        ldx ypos+i
+        lda lsrtab, x
         tax
-        clc
-        lda multab40, x
-        adc zp_yptr+0
+        lda multab40 + 2*MULTAB_X_STRIDE*i, x
         sta zp_yptr+0
-        lda multab40+1, x
-        adc zp_yptr+1
+        lda multab40 + 2*MULTAB_X_STRIDE*i+1, x
         sta zp_yptr+1
 
         lda ypos+i+1
         sec
         sbc ypos+i
-        clc
-        adc #8
-        asl
-        asl
-        asl
-        asl
-        sta zp_ytmp
+        tax
 
         lda ypos+i
         and #15
-        ora zp_ytmp
+        ora asltab, x
         sta zp_ytmp
         lda #0
         sta zp_ytmp+1
@@ -168,25 +165,19 @@ render_sinewave: {
         asl zp_ytmp
         rol zp_ytmp+1
 
-        mov16imm(zp_chrptr, y0y1tbl)
-
-        clc
-        lda zp_chrptr+0
-        adc zp_ytmp+0
+        lda #<y0y1tbl
+        adc zp_ytmp+0       // note no need for CLC because of above ROL
         sta zp_chrptr+0
-        lda zp_chrptr+1
+        lda #>y0y1tbl
         adc zp_ytmp+1
         sta zp_chrptr+1
 
-        .for (var y = 0; y < 4; y++) {
+        .for (var y = 0; y < 3; y++) {
             ldy #y
             lda (zp_chrptr),y
             ldy #y*40
             sta (zp_yptr),y
         }
-        ldy #4*40
-        lda #$a0
-        sta (zp_yptr),y
     }
     rts
 }
