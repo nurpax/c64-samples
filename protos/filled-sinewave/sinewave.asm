@@ -134,15 +134,23 @@ asltab:
         .byte ((i+8) << 4)
     }
 
+y0y1tblptr_lo:
+    .for (var i = 0; i < 256; i++) {
+        .byte (i<<2) + y0y1tbl
+    }
+
+y0y1tblptr_hi:
+    .for (var i = 0; i < 256; i++) {
+        .byte ((i<<2) + y0y1tbl) >> 8
+    }
+
 render_sinewave: {
     .const zp_yptr = $20
     .const zp_chrptr = $22
-    .const zp_ytmp = $24
     .for (var i = 0; i < 40; i++) {
         // Compute destination y pointer
-        ldx ypos+i
-        lda lsrtab, x
-        tax
+        ldy ypos+i
+        ldx lsrtab, y
         lda multab40 + 2*MULTAB_X_STRIDE*i, x
         sta zp_yptr+0
         lda multab40 + 2*MULTAB_X_STRIDE*i+1, x
@@ -153,23 +161,13 @@ render_sinewave: {
         sbc ypos+i
         tax
 
-        lda ypos+i
+        tya
         and #15
         ora asltab, x
-        sta zp_ytmp
-        lda #0
-        sta zp_ytmp+1
-
-        asl zp_ytmp
-        rol zp_ytmp+1
-        asl zp_ytmp
-        rol zp_ytmp+1
-
-        lda #<y0y1tbl
-        adc zp_ytmp+0       // note no need for CLC because of above ROL
+        tax
+        lda y0y1tblptr_lo, x
         sta zp_chrptr+0
-        lda #>y0y1tbl
-        adc zp_ytmp+1
+        lda y0y1tblptr_hi, x
         sta zp_chrptr+1
 
         .for (var y = 0; y < 3; y++) {
