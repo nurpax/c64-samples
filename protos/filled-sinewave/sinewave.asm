@@ -23,6 +23,7 @@
 
 start: {
     ClearScreen($0400, $20)
+    ClearScreen($d800, LIGHT_BLUE)
 
     lda #$a0
     .for (var y = 16; y < 25; y++) {
